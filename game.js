@@ -230,6 +230,7 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    overlay.classList.add('hidden');
     lastTime = performance.now();
     loop(lastTime);
   } else {
@@ -253,7 +254,8 @@ function loop(ts) {
     }
   }
   draw();
-  animId = requestAnimationFrame(loop);
+  // endGame() may have run during lockPiece(); don't schedule another frame
+  if (!gameOver) animId = requestAnimationFrame(loop);
 }
 
 function init() {
