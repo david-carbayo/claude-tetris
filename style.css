@@ -476,3 +476,37 @@ body.skin-pixel .value {
 .hs-clear-btn:hover {
   border-color: #e57373;
 }
+
+/* ---- Sound ---- */
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mute-btn {
+  width: 32px;
+  height: 28px;
+  flex: none;
+  background: #22223a;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mute-btn:hover {
+  border-color: #7aa2f7;
+}
+
+.mute-btn[aria-pressed="true"] {
+  opacity: 0.6;
+}
+
+#volume {
+  flex: 1;
+  min-width: 0;
+  accent-color: #7aa2f7;
+  cursor: pointer;
+}

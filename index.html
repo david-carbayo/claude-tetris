@@ -40,6 +40,14 @@
           </select>
         </div>
 
+        <div class="panel-section sound-section">
+          <label class="label" for="volume">SONIDO</label>
+          <div class="sound-row">
+            <button type="button" id="mute-btn" class="mute-btn" aria-label="Silenciar" aria-pressed="false">🔊</button>
+            <input type="range" id="volume" min="0" max="100" step="5" value="60" />
+          </div>
+        </div>
+
         <div class="panel-section controls">
           <span class="label">CONTROLS</span>
           <ul>
@@ -48,6 +56,7 @@
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
             <li><kbd>P</kbd><kbd>Esc</kbd> pausa</li>
+            <li><kbd>M</kbd> silenciar</li>
           </ul>
         </div>
       </aside>
@@ -85,8 +94,10 @@
           <li><kbd>↓</kbd> bajar</li>
           <li><kbd>Space</kbd> caída</li>
           <li><kbd>P</kbd><kbd>Esc</kbd> pausa / reanudar</li>
+          <li><kbd>M</kbd> silenciar / activar sonido</li>
           <li class="pause-hint">Menú: <kbd>↑</kbd><kbd>↓</kbd> <kbd>←</kbd><kbd>→</kbd> <kbd>Enter</kbd></li>
         </ul>
+        <button type="button" class="pause-item" id="pause-mute" aria-pressed="false">Sonido: activado</button>
         <div class="pause-item pause-level" id="pause-level" tabindex="0" role="group"
              aria-label="Nivel inicial (← → para cambiar)">
           <span class="pause-level-label">Nivel inicial</span>
@@ -112,6 +123,7 @@
     </div>
   </div>
 
+  <script src="fx.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

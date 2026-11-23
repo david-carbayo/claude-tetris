@@ -81,6 +81,7 @@ function tryRotate() {
     if (!collide(rotated, current.x + kick, current.y)) {
       current.shape = rotated;
       current.x += kick;
+      playSound('rotate');
       return;
     }
   }
@@ -95,9 +96,12 @@ function merge() {
 
 function clearLines() {
   let cleared = 0;
+  const clearedRows = []; // removed rows with their original index, for fx.js
+  const prevLevel = level;
+  let points = 0;
   for (let r = ROWS - 1; r >= 0; r--) {
     if (board[r].every(v => v !== 0)) {
-      board.splice(r, 1);
+      clearedRows.push({ y: r - cleared, cells: board.splice(r, 1)[0] });
       board.unshift(new Array(COLS).fill(0));
       cleared++;
       r++;
@@ -105,13 +109,15 @@ function clearLines() {
   }
   if (cleared) {
     lines += cleared;
-    score += (LINE_SCORES[cleared] || 0) * level;
+    points = (LINE_SCORES[cleared] || 0) * level;
+    score += points;
     // Never fall below the level this game started at
     level = gameStartLevel + Math.floor(lines / 10);
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     updateHUD();
   }
   trackCombo(cleared);
+  fxOnLock(clearedRows, points, level > prevLevel);
 }
 
 function ghostY() {
@@ -124,6 +130,7 @@ function hardDrop() {
   const gy = ghostY();
   score += (gy - current.y) * 2;
   current.y = gy;
+  fxHardDrop();
   lockPiece();
 }
 
@@ -341,22 +348,25 @@ function draw() {
   drawBackground(ctx, canvas.width, canvas.height);
   drawGrid();
 
-  // board
+  // board (during a line-clear flash, fx.js puts the cleared rows back)
+  const shown = fxVisibleBoard();
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK);
+      drawBlock(ctx, c, r, shown[r][c], BLOCK);
 
-  // ghost
+  // ghost (hidden during the flash, when the stack is drawn higher than it is)
   const gy = ghostY();
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      if (current.shape[r][c])
+      if (current.shape[r][c] && !fxIsFlashing())
         drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
 
   // current piece
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+
+  fxDrawOverlay(ctx);
 }
 
 function drawNext() {
@@ -374,6 +384,7 @@ function drawNext() {
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
+  playSound('gameOver');
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -383,6 +394,7 @@ function endGame() {
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
+  fxTick(dt);
   dropAccum += dt;
   if (dropAccum >= dropInterval) {
     dropAccum = 0;
@@ -409,6 +421,7 @@ function init() {
   dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
+  fxReset();
   next = randomPiece();
   spawn();
   updateHUD();
@@ -522,7 +535,7 @@ function togglePause() {
 
 // Keyboard-navigable items, in visual order
 function pauseMenuItems() {
-  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, pauseLevel];
+  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, fxPauseMuteBtn, pauseLevel];
 }
 
 // Handles every key while the menu is open; nothing reaches the game
@@ -852,10 +865,10 @@ document.addEventListener('keydown', e => {
   if (gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
-      if (!collide(current.shape, current.x - 1, current.y)) current.x--;
+      if (!collide(current.shape, current.x - 1, current.y)) { current.x--; playSound('move'); }
       break;
     case 'ArrowRight':
-      if (!collide(current.shape, current.x + 1, current.y)) current.x++;
+      if (!collide(current.shape, current.x + 1, current.y)) { current.x++; playSound('move'); }
       break;
     case 'ArrowDown':
       softDrop();
