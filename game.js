@@ -40,14 +40,19 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
+// Deals the next piece from the 7-bag (see "Hold and queue" below).
 function randomPiece() {
-  const type = Math.floor(Math.random() * 7) + 1;
+  if (!bag.length) refillBag();
+  return createPiece(bag.shift());
+}
+
+function createPiece(type) {
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -160,17 +165,19 @@ function softDrop() {
 function lockPiece() {
   merge();
   clearLines();
+  canHold = true; // one hold per piece, re-enabled on every lock
   spawn();
 }
 
-function spawn() {
-  current = next;
-  next = randomPiece();
+// Brings in `piece` (a swapped-out held piece) or, by default, the queue head.
+function spawn(piece) {
+  current = piece || takeFromQueue();
   resetLockState();
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
   drawNext();
+  drawHold();
 }
 
 function updateHUD() {
@@ -305,9 +312,10 @@ function applySkin(id) {
   document.body.classList.add(`skin-${id}`);
   if (skinSelect) skinSelect.value = id;
   // Redraw once so the change shows while paused or after game over too.
-  if (board && current && next) {
+  if (board && current && queue.length) {
     draw();
     drawNext();
+    drawHold();
   } else {
     drawEmptyBoard();
   }
@@ -380,17 +388,101 @@ function draw() {
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
 }
 
+// Draws the «SIGUIENTES» queue: QUEUE_SIZE pieces stacked in equal slots.
 function drawNext() {
-  const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
   drawBackground(nextCtx, nextCanvas.width, nextCanvas.height);
-  const shape = next.shape;
-  const offX = Math.floor((4 - shape[0].length) / 2);
-  const offY = Math.floor((4 - shape.length) / 2);
+  const slotH = nextCanvas.height / QUEUE_SIZE;
+  queue.forEach((piece, i) => drawPreview(nextCtx, nextCanvas.width, i * slotH, slotH, piece.type, false));
+}
+
+// ---- Hold and queue ----
+// Pieces are dealt from a shuffled bag of all 7 types (no long droughts),
+// QUEUE_SIZE of them are shown ahead, and the player can hold one piece per
+// lock. `held` is a piece type (0 = none); `canHold` resets in lockPiece().
+
+const QUEUE_SIZE = 3;
+const PREVIEW_CELL = 24;
+// Grey used for the held piece while hold is unavailable, per skin.
+const HOLD_LOCKED_COLORS = { retro: '#5a5a66', neon: '#8a8a99', pastel: '#c4bfcc', pixel: '#7c7c7c' };
+
+const holdCanvas = document.getElementById('hold-canvas');
+const holdCtx = holdCanvas.getContext('2d');
+
+let bag = [];
+let queue = [];
+let held = 0;
+let canHold = true;
+
+// Fisher–Yates shuffle of the 7 piece types, appended to the bag.
+function refillBag() {
+  const types = [1, 2, 3, 4, 5, 6, 7];
+  for (let i = types.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [types[i], types[j]] = [types[j], types[i]];
+  }
+  bag.push(...types);
+}
+
+function takeFromQueue() {
+  const piece = queue.shift();
+  queue.push(randomPiece());
+  return piece;
+}
+
+// Called from init(): new bag, full queue, empty hold.
+function resetHoldQueue() {
+  bag = [];
+  queue = [];
+  for (let i = 0; i < QUEUE_SIZE; i++) queue.push(randomPiece());
+  held = 0;
+  canHold = true;
+}
+
+function holdPiece() {
+  if (!canHold) return;
+  const swapped = held;
+  held = current.type;
+  canHold = false;
+  dropAccum = 0; // the incoming piece gets a full gravity interval
+  spawn(swapped ? createPiece(swapped) : null);
+}
+
+// Draws a piece's trimmed shape centred in a slot, with the active skin.
+// `locked` paints it in the skin's grey via a palette override.
+function drawPreview(context, width, slotY, slotH, type, locked) {
+  const shape = PIECES[type];
+  let minR = Infinity, maxR = -1, minC = Infinity, maxC = -1;
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
-      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
+      if (shape[r][c]) {
+        minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+        minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+      }
+  const cell = PREVIEW_CELL;
+  // Whole-pixel offsets keep the pixel-art skin crisp
+  const ox = Math.round((width - (maxC - minC + 1) * cell) / 2) / cell - minC;
+  const oy = (slotY + Math.round((slotH - (maxR - minR + 1) * cell) / 2)) / cell - minR;
+  const skin = locked
+    ? Object.create(activeSkin, { colors: { value: new Array(8).fill(HOLD_LOCKED_COLORS[activeSkinId] || '#666') } })
+    : activeSkin;
+  for (let r = minR; r <= maxR; r++)
+    for (let c = minC; c <= maxC; c++)
+      if (shape[r][c]) {
+        context.save();
+        skin.drawBlock(context, ox + c, oy + r, shape[r][c], cell, locked ? 0.7 : 1);
+        context.restore();
+      }
 }
+
+// Draws the «RESERVA» panel, greyed out while hold is unavailable.
+function drawHold() {
+  holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+  drawBackground(holdCtx, holdCanvas.width, holdCanvas.height);
+  if (held) drawPreview(holdCtx, holdCanvas.width, 0, holdCanvas.height, held, !canHold);
+}
+
+// ---- End hold and queue ----
 
 function endGame() {
   gameOver = true;
@@ -433,7 +525,7 @@ function init() {
   dropAccum = 0;
   lastTime = performance.now();
   clearHeldKeys();
-  next = randomPiece();
+  resetHoldQueue();
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
@@ -973,6 +1065,8 @@ function drawEmptyBoard() {
   drawGrid();
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
   drawBackground(nextCtx, nextCanvas.width, nextCanvas.height);
+  holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+  drawBackground(holdCtx, holdCanvas.width, holdCanvas.height);
 }
 
 function handleStartScreenKey(e) {
@@ -1089,6 +1183,11 @@ document.addEventListener('keydown', e => {
     case 'Space':
       e.preventDefault();
       hardDrop();
+      break;
+    case 'KeyC':
+    case 'ShiftLeft':
+    case 'ShiftRight':
+      if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) holdPiece();
       break;
   }
   updateHUD();

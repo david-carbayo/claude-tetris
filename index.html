@@ -9,6 +9,17 @@
 <body>
   <div class="wrapper">
     <div class="game-container">
+      <aside class="panel panel-left">
+        <div class="panel-section">
+          <span class="label">RESERVA</span>
+          <canvas id="hold-canvas" width="120" height="72"></canvas>
+        </div>
+        <div class="panel-section">
+          <span class="label">SIGUIENTES</span>
+          <canvas id="next-canvas" width="120" height="216"></canvas>
+        </div>
+      </aside>
+
       <canvas id="board" width="300" height="600"></canvas>
 
       <aside class="panel">
@@ -23,11 +34,6 @@
         <div class="panel-section">
           <span class="label">LEVEL</span>
           <span class="value" id="level">1</span>
-        </div>
-
-        <div class="panel-section">
-          <span class="label">NEXT</span>
-          <canvas id="next-canvas" width="120" height="120"></canvas>
         </div>
 
         <div class="panel-section skin-section">
@@ -48,6 +54,7 @@
             <li><kbd>Z</kbd> rotar ↺</li>
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
+            <li><kbd>C</kbd><kbd>Shift</kbd> reservar</li>
             <li><kbd>P</kbd><kbd>Esc</kbd> pausa</li>
           </ul>
         </div>
@@ -86,6 +93,7 @@
           <li><kbd>Z</kbd> rotar (antihorario)</li>
           <li><kbd>↓</kbd> bajar</li>
           <li><kbd>Space</kbd> caída</li>
+          <li><kbd>C</kbd><kbd>Shift</kbd> reservar pieza</li>
           <li><kbd>P</kbd><kbd>Esc</kbd> pausa / reanudar</li>
           <li class="pause-hint">Menú: <kbd>↑</kbd><kbd>↓</kbd> <kbd>←</kbd><kbd>→</kbd> <kbd>Enter</kbd></li>
         </ul>
