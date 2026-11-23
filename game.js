@@ -106,7 +106,8 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
+    // Never fall below the level this game started at
+    level = gameStartLevel + Math.floor(lines / 10);
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     updateHUD();
   }
@@ -375,21 +376,6 @@ function endGame() {
   overlay.classList.remove('hidden');
 }
 
-function togglePause() {
-  if (gameOver) return;
-  paused = !paused;
-  if (!paused) {
-    overlay.classList.add('hidden');
-    lastTime = performance.now();
-    loop(lastTime);
-  } else {
-    cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
-  }
-}
-
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
@@ -411,23 +397,182 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  // Snapshot: changing the menu setting mid-game only affects the next game
+  gameStartLevel = startLevel;
+  level = gameStartLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  hidePauseMenu();
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
+// ---- Pause menu ----
+
+const START_LEVEL_MIN = 1;
+const START_LEVEL_MAX = 10;
+const START_LEVEL_KEY = 'tetris.startLevel';
+
+const pauseMenu = document.getElementById('pause-menu');
+const pauseResumeBtn = document.getElementById('pause-resume');
+const pauseRestartBtn = document.getElementById('pause-restart');
+const pauseControlsBtn = document.getElementById('pause-controls');
+const pauseControlsList = document.getElementById('pause-controls-list');
+const pauseLevel = document.getElementById('pause-level');
+const pauseLevelValue = document.getElementById('pause-level-value');
+const pauseLevelDown = document.getElementById('pause-level-down');
+const pauseLevelUp = document.getElementById('pause-level-up');
+
+// Level the next game starts at (persisted across reloads), and the one
+// the current game started at
+let startLevel = loadStartLevel();
+let gameStartLevel = startLevel;
+
+function clampStartLevel(n) {
+  n = Math.floor(Number(n));
+  if (!Number.isFinite(n)) return START_LEVEL_MIN;
+  return Math.min(START_LEVEL_MAX, Math.max(START_LEVEL_MIN, n));
+}
+
+function loadStartLevel() {
+  try {
+    const stored = localStorage.getItem(START_LEVEL_KEY);
+    return stored === null ? START_LEVEL_MIN : clampStartLevel(stored);
+  } catch {
+    return START_LEVEL_MIN;
+  }
+}
+
+function saveStartLevel() {
+  try {
+    localStorage.setItem(START_LEVEL_KEY, String(startLevel));
+  } catch {
+    // Storage unavailable (private mode, blocked): keep the in-memory value
+  }
+}
+
+function renderStartLevel() {
+  pauseLevelValue.textContent = startLevel;
+  pauseLevelDown.disabled = startLevel <= START_LEVEL_MIN;
+  pauseLevelUp.disabled = startLevel >= START_LEVEL_MAX;
+}
+
+function changeStartLevel(delta) {
+  const value = clampStartLevel(startLevel + delta);
+  if (value === startLevel) return;
+  startLevel = value;
+  saveStartLevel();
+  renderStartLevel();
+}
+
+function setControlsVisible(visible) {
+  pauseControlsList.classList.toggle('hidden', !visible);
+  pauseControlsBtn.setAttribute('aria-expanded', String(visible));
+  pauseControlsBtn.textContent = visible ? 'Ocultar controles' : 'Ver controles';
+}
+
+// Drop focus so a later Space/Enter cannot re-activate a menu button
+function blurActive() {
+  if (document.activeElement && document.activeElement !== document.body) {
+    document.activeElement.blur();
+  }
+}
+
+function hidePauseMenu() {
+  pauseMenu.classList.add('hidden');
+  blurActive();
+}
+
+function openPauseMenu() {
+  paused = true;
+  cancelAnimationFrame(animId);
+  setControlsVisible(false);
+  renderStartLevel();
+  pauseMenu.classList.remove('hidden');
+  pauseResumeBtn.focus();
+}
+
+function resumeGame() {
+  if (!paused || gameOver) return;
+  paused = false;
+  hidePauseMenu();
+  // Don't let the paused time count towards gravity
+  dropAccum = 0;
+  lastTime = performance.now();
+  loop(lastTime);
+}
+
+function togglePause() {
+  if (gameOver) return;
+  if (paused) resumeGame();
+  else openPauseMenu();
+}
+
+// Keyboard-navigable items, in visual order
+function pauseMenuItems() {
+  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, pauseLevel];
+}
+
+// Handles every key while the menu is open; nothing reaches the game
+function handlePauseMenuKey(e) {
+  const items = pauseMenuItems();
+  const idx = items.indexOf(document.activeElement);
+  switch (e.code) {
+    case 'Tab':
+      // Keep focus inside the menu
+      e.preventDefault();
+      if (e.shiftKey) items[idx <= 0 ? items.length - 1 : idx - 1].focus();
+      else items[(idx + 1) % items.length].focus();
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      items[idx <= 0 ? items.length - 1 : idx - 1].focus();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      items[(idx + 1) % items.length].focus();
+      break;
+    case 'ArrowLeft':
+    case 'ArrowRight':
+      e.preventDefault();
+      if (document.activeElement === pauseLevel) {
+        changeStartLevel(e.code === 'ArrowLeft' ? -1 : 1);
+      }
+      break;
+    case 'Space':
+    case 'Enter':
+    case 'NumpadEnter':
+      // Focused buttons activate natively; elsewhere just stop page scrolling
+      if (!(document.activeElement instanceof HTMLButtonElement)) e.preventDefault();
+      break;
+  }
+}
+
+pauseResumeBtn.addEventListener('click', resumeGame);
+pauseRestartBtn.addEventListener('click', init);
+pauseControlsBtn.addEventListener('click', () => {
+  setControlsVisible(pauseControlsList.classList.contains('hidden'));
+});
+pauseLevelDown.addEventListener('click', () => { changeStartLevel(-1); pauseLevel.focus(); });
+pauseLevelUp.addEventListener('click', () => { changeStartLevel(1); pauseLevel.focus(); });
+
+// ---- End pause menu ----
+
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
-  if (paused || gameOver) return;
+  if (e.code === 'KeyP' || e.code === 'Escape') {
+    // Ignore auto-repeat and browser shortcuts such as Cmd/Ctrl+P
+    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) togglePause();
+    return;
+  }
+  if (paused) { handlePauseMenuKey(e); return; }
+  if (gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
       if (!collide(current.shape, current.x - 1, current.y)) current.x--;

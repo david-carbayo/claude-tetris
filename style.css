@@ -208,3 +208,122 @@ body.skin-pixel .value {
   color: #f8d800;
   letter-spacing: 3px;
 }
+
+/* ---- Pause menu ---- */
+.pause-box {
+  min-width: 240px;
+  gap: 10px;
+}
+
+#pause-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #7aa2f7;
+  margin-bottom: 4px;
+}
+
+.pause-item {
+  width: 220px;
+  background: #1a1a25;
+  color: #e0e0e0;
+  border: 1px solid #2a2a3a;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pause-item:hover {
+  background: #22222e;
+}
+
+.pause-item:focus {
+  outline: none;
+  border-color: #7aa2f7;
+  background: #22222e;
+  box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.35);
+}
+
+.pause-level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.pause-level-label {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pause-level-value {
+  min-width: 24px;
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 18px;
+  color: #7aa2f7;
+}
+
+.pause-level-btn {
+  width: 26px;
+  height: 26px;
+  background: #2a2a3a;
+  color: #e0e0e0;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pause-level-btn:hover:not(:disabled) {
+  background: #7aa2f7;
+  color: #0f0f17;
+}
+
+.pause-level-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pause-controls {
+  list-style: none;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #14141d;
+  border: 1px solid #2a2a3a;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #888;
+  text-align: left;
+}
+
+.pause-controls.hidden {
+  display: none;
+}
+
+.pause-controls kbd {
+  display: inline-block;
+  background: #1e1e2e;
+  border: 1px solid #333348;
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-right: 3px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #aaa;
+}
+
+.pause-hint {
+  font-size: 11px;
+  color: #555570;
+}
