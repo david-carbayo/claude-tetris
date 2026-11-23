@@ -44,7 +44,8 @@
           <span class="label">CONTROLS</span>
           <ul>
             <li><kbd>←</kbd><kbd>→</kbd> mover</li>
-            <li><kbd>↑</kbd> rotar</li>
+            <li><kbd>↑</kbd><kbd>X</kbd> rotar ↻</li>
+            <li><kbd>Z</kbd> rotar ↺</li>
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
             <li><kbd>P</kbd><kbd>Esc</kbd> pausa</li>
@@ -81,7 +82,8 @@
         <button type="button" class="pause-item" id="pause-controls" aria-expanded="false" aria-controls="pause-controls-list">Ver controles</button>
         <ul id="pause-controls-list" class="pause-controls hidden">
           <li><kbd>←</kbd><kbd>→</kbd> mover</li>
-          <li><kbd>↑</kbd><kbd>X</kbd> rotar</li>
+          <li><kbd>↑</kbd><kbd>X</kbd> rotar (horario)</li>
+          <li><kbd>Z</kbd> rotar (antihorario)</li>
           <li><kbd>↓</kbd> bajar</li>
           <li><kbd>Space</kbd> caída</li>
           <li><kbd>P</kbd><kbd>Esc</kbd> pausa / reanudar</li>
@@ -95,6 +97,21 @@
           <button type="button" class="pause-level-btn" id="pause-level-up" tabindex="-1" aria-label="Subir nivel inicial">+</button>
         </div>
         <p class="pause-hint">El nivel inicial se aplica al reiniciar</p>
+        <div class="pause-item pause-level pause-handling" id="pause-das" tabindex="0" role="group"
+             aria-label="DAS, retardo antes de repetir en milisegundos (← → para cambiar)">
+          <span class="pause-level-label">DAS</span>
+          <button type="button" class="pause-level-btn" data-delta="-1" tabindex="-1" aria-label="Bajar DAS">−</button>
+          <span class="pause-level-value" aria-live="polite">170</span>
+          <button type="button" class="pause-level-btn" data-delta="1" tabindex="-1" aria-label="Subir DAS">+</button>
+        </div>
+        <div class="pause-item pause-level pause-handling" id="pause-arr" tabindex="0" role="group"
+             aria-label="ARR, intervalo de repetición en milisegundos (← → para cambiar)">
+          <span class="pause-level-label">ARR</span>
+          <button type="button" class="pause-level-btn" data-delta="-1" tabindex="-1" aria-label="Bajar ARR">−</button>
+          <span class="pause-level-value" aria-live="polite">50</span>
+          <button type="button" class="pause-level-btn" data-delta="1" tabindex="-1" aria-label="Subir ARR">+</button>
+        </div>
+        <p class="pause-hint">DAS: espera antes de repetir · ARR: intervalo (ms, 0 = instantáneo)</p>
       </div>
     </div>
 

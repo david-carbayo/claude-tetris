@@ -74,16 +74,36 @@ function rotateCW(shape) {
   return result;
 }
 
-function tryRotate() {
-  const rotated = rotateCW(current.shape);
-  const kicks = [0, -1, 1, -2, 2];
-  for (const kick of kicks) {
-    if (!collide(rotated, current.x + kick, current.y)) {
+function rotateCCW(shape) {
+  const rows = shape.length, cols = shape[0].length;
+  const result = Array.from({ length: cols }, () => new Array(rows).fill(0));
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      result[cols - 1 - c][r] = shape[r][c];
+  return result;
+}
+
+// [dx, dy] offsets tried in order: wall kicks first, then floor kicks
+// (negative dy lifts the piece) so it can rotate while resting on the stack.
+const ROTATION_KICKS = [
+  [0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0],
+  [0, -1], [-1, -1], [1, -1], [0, -2],
+];
+
+// dir: 1 = clockwise, -1 = anticlockwise. Returns true if the piece rotated.
+function tryRotate(dir = 1) {
+  const rotated = dir < 0 ? rotateCCW(current.shape) : rotateCW(current.shape);
+  const wasGrounded = isGrounded();
+  for (const [dx, dy] of ROTATION_KICKS) {
+    if (!collide(rotated, current.x + dx, current.y + dy)) {
       current.shape = rotated;
-      current.x += kick;
-      return;
+      current.x += dx;
+      current.y += dy;
+      onPieceMoved(wasGrounded);
+      return true;
     }
   }
+  return false;
 }
 
 function merge() {
@@ -127,13 +147,13 @@ function hardDrop() {
   lockPiece();
 }
 
+// On the ground, soft drop does nothing: the lock delay decides when to lock.
 function softDrop() {
   if (!collide(current.shape, current.x, current.y + 1)) {
     current.y++;
+    noteDescent();
     score += 1;
     updateHUD();
-  } else {
-    lockPiece();
   }
 }
 
@@ -146,6 +166,7 @@ function lockPiece() {
 function spawn() {
   current = next;
   next = randomPiece();
+  resetLockState();
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
@@ -383,15 +404,17 @@ function endGame() {
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
+  updateAutoShift(dt);
   dropAccum += dt;
   if (dropAccum >= dropInterval) {
     dropAccum = 0;
+    // A grounded piece no longer locks here; updateLockDelay() does it
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
-    } else {
-      lockPiece();
+      noteDescent();
     }
   }
+  updateLockDelay(dt);
   draw();
   // endGame() may have run during lockPiece(); don't schedule another frame
   if (!gameOver) animId = requestAnimationFrame(loop);
@@ -409,6 +432,7 @@ function init() {
   dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
+  clearHeldKeys();
   next = randomPiece();
   spawn();
   updateHUD();
@@ -498,8 +522,10 @@ function hidePauseMenu() {
 function openPauseMenu() {
   paused = true;
   cancelAnimationFrame(animId);
+  clearHeldKeys(); // keyups during the menu would be missed
   setControlsVisible(false);
   renderStartLevel();
+  renderHandling();
   pauseMenu.classList.remove('hidden');
   pauseResumeBtn.focus();
 }
@@ -522,7 +548,7 @@ function togglePause() {
 
 // Keyboard-navigable items, in visual order
 function pauseMenuItems() {
-  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, pauseLevel];
+  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, pauseLevel, pauseDas, pauseArr];
 }
 
 // Handles every key while the menu is open; nothing reaches the game
@@ -549,6 +575,10 @@ function handlePauseMenuKey(e) {
       e.preventDefault();
       if (document.activeElement === pauseLevel) {
         changeStartLevel(e.code === 'ArrowLeft' ? -1 : 1);
+      } else if (document.activeElement === pauseDas) {
+        changeHandling('das', e.code === 'ArrowLeft' ? -1 : 1);
+      } else if (document.activeElement === pauseArr) {
+        changeHandling('arr', e.code === 'ArrowLeft' ? -1 : 1);
       }
       break;
     case 'Space':
@@ -569,6 +599,195 @@ pauseLevelDown.addEventListener('click', () => { changeStartLevel(-1); pauseLeve
 pauseLevelUp.addEventListener('click', () => { changeStartLevel(1); pauseLevel.focus(); });
 
 // ---- End pause menu ----
+
+// ---- Fine controls ----
+// Lock delay with capped move resets, and our own DAS/ARR for sideways
+// movement, driven by loop() from tracked keydown/keyup state rather than
+// the OS key repeat. DAS/ARR are configurable in the pause menu.
+
+const LOCK_DELAY = 500;      // ms a grounded piece waits before locking
+const MAX_LOCK_RESETS = 15;  // successful moves/rotations that restart it
+
+let lockTimer = 0;   // ms spent grounded since the last reset
+let lockResets = 0;  // resets used since spawn or the last new lowest row
+let lowestY = 0;     // lowest row reached by the current piece
+
+function isGrounded() {
+  return collide(current.shape, current.x, current.y + 1);
+}
+
+// Called from spawn() for every new piece.
+function resetLockState() {
+  lockTimer = 0;
+  lockResets = 0;
+  lowestY = current.y;
+}
+
+// Called after the piece moves down; reaching a new lowest row refills the
+// resets, so the cap only limits stalling in place.
+function noteDescent() {
+  if (current.y > lowestY) {
+    lowestY = current.y;
+    lockTimer = 0;
+    lockResets = 0;
+  }
+}
+
+// Called after every successful sideways move or rotation.
+function onPieceMoved(wasGrounded) {
+  if ((wasGrounded || isGrounded()) && lockResets < MAX_LOCK_RESETS) {
+    lockTimer = 0;
+    lockResets++;
+  }
+}
+
+// Called from loop() each frame. The timer only runs while grounded and is
+// not cleared by being lifted off the ground, so floor kicks cannot be used
+// to stall once the resets are spent.
+function updateLockDelay(dt) {
+  if (gameOver || !isGrounded()) return;
+  lockTimer += Math.max(0, dt);
+  if (lockTimer >= LOCK_DELAY) lockPiece();
+}
+
+const HANDLING_KEY = 'tetris.handling';
+const HANDLING_LIMITS = {
+  das: { min: 50, max: 300, step: 10, def: 170 },
+  arr: { min: 0, max: 100, step: 5, def: 50 },
+};
+
+const pauseDas = document.getElementById('pause-das');
+const pauseArr = document.getElementById('pause-arr');
+
+let handling = loadHandling();
+
+function clampHandling(name, v) {
+  const { min, max, def } = HANDLING_LIMITS[name];
+  v = Math.round(Number(v));
+  if (!Number.isFinite(v)) return def;
+  return Math.min(max, Math.max(min, v));
+}
+
+function loadHandling() {
+  let data = null;
+  try {
+    data = JSON.parse(localStorage.getItem(HANDLING_KEY));
+  } catch {
+    // storage unavailable or corrupt: use the defaults
+  }
+  const ok = data && typeof data === 'object';
+  return {
+    das: clampHandling('das', ok && data.das != null ? data.das : HANDLING_LIMITS.das.def),
+    arr: clampHandling('arr', ok && data.arr != null ? data.arr : HANDLING_LIMITS.arr.def),
+  };
+}
+
+function saveHandling() {
+  try {
+    localStorage.setItem(HANDLING_KEY, JSON.stringify(handling));
+  } catch {
+    // storage unavailable: keep the in-memory values
+  }
+}
+
+function renderHandling() {
+  for (const [name, el] of [['das', pauseDas], ['arr', pauseArr]]) {
+    const { min, max } = HANDLING_LIMITS[name];
+    el.querySelector('.pause-level-value').textContent = handling[name];
+    el.querySelector('[data-delta="-1"]').disabled = handling[name] <= min;
+    el.querySelector('[data-delta="1"]').disabled = handling[name] >= max;
+  }
+}
+
+function changeHandling(name, delta) {
+  const value = clampHandling(name, handling[name] + delta * HANDLING_LIMITS[name].step);
+  if (value === handling[name]) return;
+  handling[name] = value;
+  saveHandling();
+  renderHandling();
+}
+
+for (const [name, el] of [['das', pauseDas], ['arr', pauseArr]]) {
+  for (const btn of el.querySelectorAll('[data-delta]')) {
+    btn.addEventListener('click', () => {
+      changeHandling(name, Number(btn.dataset.delta));
+      el.focus();
+    });
+  }
+}
+
+// Sideways input: the most recently pressed held direction wins.
+let leftHeld = false;
+let rightHeld = false;
+let shiftDir = 0;       // -1, 0 or 1
+let shiftTimer = 0;     // ms since the direction was pressed / last repeat
+let shiftCharged = false;
+
+function shiftPiece(dir) {
+  if (collide(current.shape, current.x + dir, current.y)) return false;
+  const wasGrounded = isGrounded();
+  current.x += dir;
+  onPieceMoved(wasGrounded);
+  return true;
+}
+
+function startShift(dir) {
+  shiftDir = dir;
+  shiftTimer = 0;
+  shiftCharged = false;
+}
+
+function pressShift(dir) {
+  if (dir < 0) leftHeld = true;
+  else rightHeld = true;
+  startShift(dir);
+  shiftPiece(dir);
+}
+
+function releaseShift(dir) {
+  if (dir < 0) leftHeld = false;
+  else rightHeld = false;
+  if (shiftDir !== dir) return;
+  // Fall back to the other direction if it is still held
+  if (dir < 0 && rightHeld) startShift(1);
+  else if (dir > 0 && leftHeld) startShift(-1);
+  else shiftDir = 0;
+}
+
+function clearHeldKeys() {
+  leftHeld = rightHeld = false;
+  shiftDir = 0;
+}
+
+// Called from loop() each frame: DAS charge, then one move per ARR
+// (ARR 0 slides straight to the wall).
+function updateAutoShift(dt) {
+  if (!shiftDir || gameOver) return;
+  shiftTimer += Math.max(0, dt);
+  if (!shiftCharged) {
+    if (shiftTimer < handling.das) return;
+    shiftCharged = true;
+    shiftTimer -= handling.das;
+    if (!shiftPiece(shiftDir)) { shiftTimer = 0; return; }
+  }
+  if (handling.arr === 0) {
+    while (shiftPiece(shiftDir));
+    shiftTimer = 0;
+    return;
+  }
+  while (shiftTimer >= handling.arr) {
+    shiftTimer -= handling.arr;
+    if (!shiftPiece(shiftDir)) { shiftTimer = 0; break; }
+  }
+}
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'ArrowLeft') releaseShift(-1);
+  else if (e.code === 'ArrowRight') releaseShift(1);
+});
+window.addEventListener('blur', clearHeldKeys);
+
+// ---- End fine controls ----
 
 // ---- High scores ----
 // Top 5 scores plus all-time stats, persisted in localStorage. Every storage
@@ -852,17 +1071,20 @@ document.addEventListener('keydown', e => {
   if (gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
-      if (!collide(current.shape, current.x - 1, current.y)) current.x--;
-      break;
     case 'ArrowRight':
-      if (!collide(current.shape, current.x + 1, current.y)) current.x++;
+      // Repeat comes from our own DAS/ARR in loop(), not the OS
+      e.preventDefault();
+      if (!e.repeat) pressShift(e.code === 'ArrowLeft' ? -1 : 1);
       break;
     case 'ArrowDown':
       softDrop();
       break;
     case 'ArrowUp':
     case 'KeyX':
-      tryRotate();
+      if (!e.repeat) tryRotate(1);
+      break;
+    case 'KeyZ':
+      if (!e.repeat && !e.ctrlKey && !e.metaKey) tryRotate(-1);
       break;
     case 'Space':
       e.preventDefault();
