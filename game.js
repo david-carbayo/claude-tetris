@@ -105,6 +105,7 @@ function tryRotate(dir = 1) {
       current.x += dx;
       current.y += dy;
       onPieceMoved(wasGrounded);
+      playSound('rotate');
       return true;
     }
   }
@@ -120,9 +121,12 @@ function merge() {
 
 function clearLines() {
   let cleared = 0;
+  const clearedRows = []; // removed rows with their original index, for fx.js
+  const prevLevel = level;
+  let points = 0;
   for (let r = ROWS - 1; r >= 0; r--) {
     if (board[r].every(v => v !== 0)) {
-      board.splice(r, 1);
+      clearedRows.push({ y: r - cleared, cells: board.splice(r, 1)[0] });
       board.unshift(new Array(COLS).fill(0));
       cleared++;
       r++;
@@ -130,13 +134,15 @@ function clearLines() {
   }
   if (cleared) {
     lines += cleared;
-    score += (LINE_SCORES[cleared] || 0) * level;
+    points = (LINE_SCORES[cleared] || 0) * level;
+    score += points;
     // Never fall below the level this game started at
     level = gameStartLevel + Math.floor(lines / 10);
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     updateHUD();
   }
   trackCombo(cleared);
+  fxOnLock(clearedRows, points, level > prevLevel);
 }
 
 function ghostY() {
@@ -149,6 +155,7 @@ function hardDrop() {
   const gy = ghostY();
   score += (gy - current.y) * 2;
   current.y = gy;
+  fxHardDrop();
   lockPiece();
 }
 
@@ -370,22 +377,25 @@ function draw() {
   drawBackground(ctx, canvas.width, canvas.height);
   drawGrid();
 
-  // board
+  // board (during a line-clear flash, fx.js puts the cleared rows back)
+  const shown = fxVisibleBoard();
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK);
+      drawBlock(ctx, c, r, shown[r][c], BLOCK);
 
-  // ghost
+  // ghost (hidden during the flash, when the stack is drawn higher than it is)
   const gy = ghostY();
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      if (current.shape[r][c])
+      if (current.shape[r][c] && !fxIsFlashing())
         drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
 
   // current piece
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+
+  fxDrawOverlay(ctx);
 }
 
 // Draws the «SIGUIENTES» queue: QUEUE_SIZE pieces stacked in equal slots.
@@ -487,6 +497,7 @@ function drawHold() {
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
+  playSound('gameOver');
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -496,6 +507,7 @@ function endGame() {
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
+  fxTick(dt);
   updateAutoShift(dt);
   dropAccum += dt;
   if (dropAccum >= dropInterval) {
@@ -525,6 +537,7 @@ function init() {
   dropAccum = 0;
   lastTime = performance.now();
   clearHeldKeys();
+  fxReset();
   resetHoldQueue();
   spawn();
   updateHUD();
@@ -640,7 +653,7 @@ function togglePause() {
 
 // Keyboard-navigable items, in visual order
 function pauseMenuItems() {
-  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, pauseLevel, pauseDas, pauseArr];
+  return [pauseResumeBtn, pauseRestartBtn, pauseControlsBtn, fxPauseMuteBtn, pauseLevel, pauseDas, pauseArr];
 }
 
 // Handles every key while the menu is open; nothing reaches the game
@@ -815,11 +828,13 @@ let shiftDir = 0;       // -1, 0 or 1
 let shiftTimer = 0;     // ms since the direction was pressed / last repeat
 let shiftCharged = false;
 
-function shiftPiece(dir) {
+// `silent` skips the move sound, so an ARR 0 slide plays it only once.
+function shiftPiece(dir, silent = false) {
   if (collide(current.shape, current.x + dir, current.y)) return false;
   const wasGrounded = isGrounded();
   current.x += dir;
   onPieceMoved(wasGrounded);
+  if (!silent) playSound('move');
   return true;
 }
 
@@ -863,7 +878,9 @@ function updateAutoShift(dt) {
     if (!shiftPiece(shiftDir)) { shiftTimer = 0; return; }
   }
   if (handling.arr === 0) {
-    while (shiftPiece(shiftDir));
+    let moved = false;
+    while (shiftPiece(shiftDir, true)) moved = true;
+    if (moved) playSound('move');
     shiftTimer = 0;
     return;
   }
