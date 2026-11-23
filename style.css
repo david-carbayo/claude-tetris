@@ -270,6 +270,10 @@ body.skin-pixel .value {
   color: #7aa2f7;
 }
 
+.pause-handling .pause-level-value {
+  min-width: 40px;
+}
+
 .pause-level-btn {
   width: 26px;
   height: 26px;
