@@ -156,20 +156,165 @@ function updateHUD() {
   levelEl.textContent = level;
 }
 
+// ---- Skins ----
+// Each skin supplies a palette indexed like PIECES (index 0 unused), the
+// canvas background and grid colours, and its own block renderer. drawBlock()
+// and drawGrid() delegate to the active skin, so switching skins only needs a
+// redraw. Renderers must leave shadowBlur and globalAlpha reset.
+
+const SKIN_STORAGE_KEY = 'tetris-skin';
+const DEFAULT_SKIN = 'retro';
+
+// Rounded-rectangle path built from arcs, so it works without ctx.roundRect.
+function roundedRectPath(context, x, y, w, h, r) {
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
+}
+
+const SKINS = {
+  retro: {
+    colors: COLORS,
+    background: '#1a1a25',
+    grid: '#22222e',
+    drawBlock(context, x, y, colorIndex, size, alpha) {
+      context.globalAlpha = alpha;
+      context.fillStyle = this.colors[colorIndex];
+      context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+      // highlight
+      context.fillStyle = 'rgba(255,255,255,0.12)';
+      context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+    },
+  },
+
+  neon: {
+    colors: [null, '#00f0ff', '#fff200', '#e040fb', '#39ff14', '#ff1744', '#3d8bff', '#ff9100'],
+    background: '#000000',
+    grid: '#0e0e18',
+    drawBlock(context, x, y, colorIndex, size, alpha) {
+      const color = this.colors[colorIndex];
+      const px = x * size + 3, py = y * size + 3, s = size - 6;
+      context.globalAlpha = alpha;
+      context.shadowColor = color;
+      context.shadowBlur = size * 0.5;
+      context.strokeStyle = color;
+      context.lineWidth = 2;
+      context.strokeRect(px, py, s, s);
+      context.shadowBlur = 0;
+      context.globalAlpha = alpha * 0.25;
+      context.fillStyle = color;
+      context.fillRect(px, py, s, s);
+    },
+  },
+
+  pastel: {
+    colors: [null, '#a0e7e5', '#fff1a8', '#d5b8ff', '#b5ead7', '#ffb5c2', '#a7c7e7', '#ffd3a5'],
+    background: '#f7f3fb',
+    grid: '#ebe4f3',
+    drawBlock(context, x, y, colorIndex, size, alpha) {
+      const px = x * size + 2, py = y * size + 2, s = size - 4;
+      context.globalAlpha = alpha;
+      roundedRectPath(context, px, py, s, s, size * 0.25);
+      context.fillStyle = this.colors[colorIndex];
+      context.fill();
+      context.strokeStyle = 'rgba(80,60,110,0.18)';
+      context.lineWidth = 1;
+      context.stroke();
+      // soft sheen in the upper-left corner
+      context.fillStyle = 'rgba(255,255,255,0.55)';
+      roundedRectPath(context, px + s * 0.18, py + s * 0.14, s * 0.32, s * 0.16, s * 0.08);
+      context.fill();
+    },
+  },
+
+  pixel: {
+    colors: [null, '#3cbcfc', '#f8d800', '#b846f8', '#58d854', '#f83800', '#0058f8', '#fc9838'],
+    background: '#141428',
+    grid: '#1f1f3a',
+    drawBlock(context, x, y, colorIndex, size, alpha) {
+      // A 10 x 10 "pixel" texture: bevelled edges, a shine pixel and dithering.
+      const u = size / 10;
+      const ox = x * size, oy = y * size;
+      const dot = (cx, cy, w, h, style) => {
+        context.fillStyle = style;
+        context.fillRect(ox + cx * u, oy + cy * u, w * u, h * u);
+      };
+      context.globalAlpha = alpha;
+      dot(0, 0, 10, 10, this.colors[colorIndex]);
+      dot(0, 0, 10, 1, 'rgba(255,255,255,0.45)');
+      dot(0, 1, 1, 9, 'rgba(255,255,255,0.3)');
+      dot(0, 9, 10, 1, 'rgba(0,0,0,0.5)');
+      dot(9, 0, 1, 9, 'rgba(0,0,0,0.4)');
+      dot(2, 2, 2, 1, 'rgba(255,255,255,0.8)');
+      dot(2, 3, 1, 1, 'rgba(255,255,255,0.8)');
+      for (let r = 2; r < 9; r++)
+        for (let c = 2; c < 9; c++)
+          if ((r + c) % 4 === 0 && r + c > 7) dot(c, r, 1, 1, 'rgba(0,0,0,0.18)');
+    },
+  },
+};
+
+const skinSelect = document.getElementById('skin-select');
+let activeSkinId = DEFAULT_SKIN;
+let activeSkin = SKINS[DEFAULT_SKIN];
+
+function loadSkinPreference() {
+  try {
+    const stored = localStorage.getItem(SKIN_STORAGE_KEY);
+    if (stored && Object.prototype.hasOwnProperty.call(SKINS, stored)) return stored;
+  } catch (e) { /* storage unavailable */ }
+  return DEFAULT_SKIN;
+}
+
+function saveSkinPreference(id) {
+  try { localStorage.setItem(SKIN_STORAGE_KEY, id); } catch (e) { /* storage unavailable */ }
+}
+
+function applySkin(id) {
+  if (!Object.prototype.hasOwnProperty.call(SKINS, id)) id = DEFAULT_SKIN;
+  document.body.classList.remove(`skin-${activeSkinId}`);
+  activeSkinId = id;
+  activeSkin = SKINS[id];
+  document.body.classList.add(`skin-${id}`);
+  if (skinSelect) skinSelect.value = id;
+  // Redraw once so the change shows while paused or after game over too.
+  if (board && current && next) {
+    draw();
+    drawNext();
+  }
+}
+
+if (skinSelect) {
+  skinSelect.addEventListener('change', () => {
+    applySkin(skinSelect.value);
+    saveSkinPreference(activeSkinId);
+    skinSelect.blur(); // give the keyboard back to the game
+  });
+  // While focused, arrows/Space must drive the game, not the select. The
+  // event still bubbles to the document handler.
+  skinSelect.addEventListener('keydown', e => {
+    if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+  });
+}
+
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  context.globalAlpha = 1;
+  context.save();
+  activeSkin.drawBlock(context, x, y, colorIndex, size, alpha ?? 1);
+  context.restore(); // resets shadowBlur, globalAlpha and styles per block
+}
+
+function drawBackground(context, width, height) {
+  context.fillStyle = activeSkin.background;
+  context.fillRect(0, 0, width, height);
 }
 
 function drawGrid() {
-  ctx.strokeStyle = '#22222e';
+  ctx.strokeStyle = activeSkin.grid;
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -185,8 +330,11 @@ function drawGrid() {
   }
 }
 
+// ---- End skins ----
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground(ctx, canvas.width, canvas.height);
   drawGrid();
 
   // board
@@ -210,6 +358,7 @@ function draw() {
 function drawNext() {
   const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  drawBackground(nextCtx, nextCanvas.width, nextCanvas.height);
   const shape = next.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
@@ -303,4 +452,5 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
+applySkin(loadSkinPreference());
 init();

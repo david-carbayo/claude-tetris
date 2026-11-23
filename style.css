@@ -150,3 +150,61 @@ kbd {
 #restart-btn:hover {
   background: #9bbdff;
 }
+
+/* ---- Skins ---- */
+#skin-select {
+  background: #22223a;
+  color: #e0e0e0;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+body.skin-neon {
+  background: #000;
+}
+
+body.skin-neon #board,
+body.skin-neon #next-canvas {
+  border-color: #1b3a4a;
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.25);
+}
+
+body.skin-neon .value {
+  color: #00f0ff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+}
+
+body.skin-pastel {
+  background: #2b2733;
+}
+
+body.skin-pastel #board,
+body.skin-pastel #next-canvas {
+  border-color: #d9cfe8;
+  border-radius: 10px;
+}
+
+body.skin-pastel .value {
+  color: #d5b8ff;
+}
+
+body.skin-pixel {
+  background: #0c0c1e;
+}
+
+body.skin-pixel #board,
+body.skin-pixel #next-canvas {
+  border-color: #3a3a6a;
+  border-radius: 0;
+  box-shadow: 0 0 0 2px #3a3a6a;
+  image-rendering: pixelated;
+}
+
+body.skin-pixel .value {
+  color: #f8d800;
+  letter-spacing: 3px;
+}
