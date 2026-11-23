@@ -47,7 +47,31 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <!-- High scores (game over only) -->
+        <div id="hs-gameover" class="hs" hidden>
+          <p id="hs-new-record" class="hs-new-record" hidden>¡Nuevo récord!</p>
+          <form id="hs-form" class="hs-form" hidden>
+            <input id="hs-name" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" spellcheck="false" aria-label="Nombre del jugador" />
+            <button type="submit">Guardar</button>
+          </form>
+          <div id="hs-scores"></div>
+          <p id="hs-stats" class="hs-stats"></p>
+          <button type="button" class="hs-clear-btn">Borrar récords</button>
+        </div>
         <button id="restart-btn">Reiniciar</button>
+      </div>
+    </div>
+
+    <!-- High scores: start screen shown before the first game -->
+    <div id="start-screen" class="overlay hidden">
+      <div class="overlay-box hs">
+        <p class="hs-title">TETRIS</p>
+        <p class="hs-heading">RÉCORDS</p>
+        <div id="start-scores"></div>
+        <p id="start-stats" class="hs-stats"></p>
+        <button id="start-btn" type="button">Jugar</button>
+        <p class="hs-hint">Pulsa <kbd>Enter</kbd> para jugar</p>
+        <button type="button" class="hs-clear-btn">Borrar récords</button>
       </div>
     </div>
   </div>
