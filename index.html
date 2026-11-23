@@ -9,6 +9,17 @@
 <body>
   <div class="wrapper">
     <div class="game-container">
+      <aside class="panel panel-left">
+        <div class="panel-section">
+          <span class="label">RESERVA</span>
+          <canvas id="hold-canvas" width="120" height="72"></canvas>
+        </div>
+        <div class="panel-section">
+          <span class="label">SIGUIENTES</span>
+          <canvas id="next-canvas" width="120" height="216"></canvas>
+        </div>
+      </aside>
+
       <canvas id="board" width="300" height="600"></canvas>
 
       <aside class="panel">
@@ -25,19 +36,35 @@
           <span class="value" id="level">1</span>
         </div>
 
-        <div class="panel-section">
-          <span class="label">NEXT</span>
-          <canvas id="next-canvas" width="120" height="120"></canvas>
+        <div class="panel-section skin-section">
+          <label class="label" for="skin-select">TEMA</label>
+          <select id="skin-select">
+            <option value="retro">Retro</option>
+            <option value="neon">Neon</option>
+            <option value="pastel">Pastel</option>
+            <option value="pixel">Pixel art</option>
+          </select>
+        </div>
+
+        <div class="panel-section sound-section">
+          <label class="label" for="volume">SONIDO</label>
+          <div class="sound-row">
+            <button type="button" id="mute-btn" class="mute-btn" aria-label="Silenciar" aria-pressed="false">🔊</button>
+            <input type="range" id="volume" min="0" max="100" step="5" value="60" />
+          </div>
         </div>
 
         <div class="panel-section controls">
           <span class="label">CONTROLS</span>
           <ul>
             <li><kbd>←</kbd><kbd>→</kbd> mover</li>
-            <li><kbd>↑</kbd> rotar</li>
+            <li><kbd>↑</kbd><kbd>X</kbd> rotar ↻</li>
+            <li><kbd>Z</kbd> rotar ↺</li>
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
-            <li><kbd>P</kbd> pausa</li>
+            <li><kbd>C</kbd><kbd>Shift</kbd> reservar</li>
+            <li><kbd>P</kbd><kbd>Esc</kbd> pausa</li>
+            <li><kbd>M</kbd> silenciar</li>
           </ul>
         </div>
       </aside>
@@ -47,11 +74,81 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <!-- High scores (game over only) -->
+        <div id="hs-gameover" class="hs" hidden>
+          <p id="hs-new-record" class="hs-new-record" hidden>¡Nuevo récord!</p>
+          <form id="hs-form" class="hs-form" hidden>
+            <input id="hs-name" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" spellcheck="false" aria-label="Nombre del jugador" />
+            <button type="submit">Guardar</button>
+          </form>
+          <div id="hs-scores"></div>
+          <p id="hs-stats" class="hs-stats"></p>
+          <button type="button" class="hs-clear-btn">Borrar récords</button>
+        </div>
         <button id="restart-btn">Reiniciar</button>
+      </div>
+    </div>
+
+    <!-- Pause menu -->
+    <div id="pause-menu" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="overlay-box pause-box">
+        <p id="pause-title">PAUSA</p>
+        <button type="button" class="pause-item" id="pause-resume">Reanudar</button>
+        <button type="button" class="pause-item" id="pause-restart">Reiniciar</button>
+        <button type="button" class="pause-item" id="pause-controls" aria-expanded="false" aria-controls="pause-controls-list">Ver controles</button>
+        <ul id="pause-controls-list" class="pause-controls hidden">
+          <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+          <li><kbd>↑</kbd><kbd>X</kbd> rotar (horario)</li>
+          <li><kbd>Z</kbd> rotar (antihorario)</li>
+          <li><kbd>↓</kbd> bajar</li>
+          <li><kbd>Space</kbd> caída</li>
+          <li><kbd>C</kbd><kbd>Shift</kbd> reservar pieza</li>
+          <li><kbd>P</kbd><kbd>Esc</kbd> pausa / reanudar</li>
+          <li><kbd>M</kbd> silenciar / activar sonido</li>
+          <li class="pause-hint">Menú: <kbd>↑</kbd><kbd>↓</kbd> <kbd>←</kbd><kbd>→</kbd> <kbd>Enter</kbd></li>
+        </ul>
+        <button type="button" class="pause-item" id="pause-mute" aria-pressed="false">Sonido: activado</button>
+        <div class="pause-item pause-level" id="pause-level" tabindex="0" role="group"
+             aria-label="Nivel inicial (← → para cambiar)">
+          <span class="pause-level-label">Nivel inicial</span>
+          <button type="button" class="pause-level-btn" id="pause-level-down" tabindex="-1" aria-label="Bajar nivel inicial">−</button>
+          <span class="pause-level-value" id="pause-level-value" aria-live="polite">1</span>
+          <button type="button" class="pause-level-btn" id="pause-level-up" tabindex="-1" aria-label="Subir nivel inicial">+</button>
+        </div>
+        <p class="pause-hint">El nivel inicial se aplica al reiniciar</p>
+        <div class="pause-item pause-level pause-handling" id="pause-das" tabindex="0" role="group"
+             aria-label="DAS, retardo antes de repetir en milisegundos (← → para cambiar)">
+          <span class="pause-level-label">DAS</span>
+          <button type="button" class="pause-level-btn" data-delta="-1" tabindex="-1" aria-label="Bajar DAS">−</button>
+          <span class="pause-level-value" aria-live="polite">170</span>
+          <button type="button" class="pause-level-btn" data-delta="1" tabindex="-1" aria-label="Subir DAS">+</button>
+        </div>
+        <div class="pause-item pause-level pause-handling" id="pause-arr" tabindex="0" role="group"
+             aria-label="ARR, intervalo de repetición en milisegundos (← → para cambiar)">
+          <span class="pause-level-label">ARR</span>
+          <button type="button" class="pause-level-btn" data-delta="-1" tabindex="-1" aria-label="Bajar ARR">−</button>
+          <span class="pause-level-value" aria-live="polite">50</span>
+          <button type="button" class="pause-level-btn" data-delta="1" tabindex="-1" aria-label="Subir ARR">+</button>
+        </div>
+        <p class="pause-hint">DAS: espera antes de repetir · ARR: intervalo (ms, 0 = instantáneo)</p>
+      </div>
+    </div>
+
+    <!-- High scores: start screen shown before the first game -->
+    <div id="start-screen" class="overlay hidden">
+      <div class="overlay-box hs">
+        <p class="hs-title">TETRIS</p>
+        <p class="hs-heading">RÉCORDS</p>
+        <div id="start-scores"></div>
+        <p id="start-stats" class="hs-stats"></p>
+        <button id="start-btn" type="button">Jugar</button>
+        <p class="hs-hint">Pulsa <kbd>Enter</kbd> para jugar</p>
+        <button type="button" class="hs-clear-btn">Borrar récords</button>
       </div>
     </div>
   </div>
 
+  <script src="fx.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
